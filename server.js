@@ -1,7 +1,7 @@
-// Using the tools and techniques you learned so far,
-// you will scrape a website of your choice, then place the data
-// in a MongoDB database. Be sure to make the database and collection
-// before running this exercise.
+/**
+ * Scrapes from webcomicname into MSQL DB, because Oh Nos
+ * @type {*}
+ */
 
 // Consult the assignment files from earlier in class
 // if you need a refresher on Cheerio.
@@ -17,8 +17,8 @@ var cheerio = require("cheerio");
 var app = express();
 
 // Database configuration
-var databaseUrl = "scraper";
-var collections = ["scrapedData"];
+var databaseUrl = "scraping";
+var collections = ["articles"];
 
 // Hook mongojs configuration to the db variable
 var db = mongojs(databaseUrl, collections);
@@ -31,23 +31,56 @@ app.get("/", function(req, res) {
   res.send("Hello world");
 });
 
-// TODO: make two more routes
-
 // Route 1
 // =======
-// This route will retrieve all of the data
-// from the scrapedData collection as a json (this will be populated
-// by the data you scrape using the next route)
-
+// Retrieve all scraped data from the database
+app.get('/all', (req, res) => {
+    db.scraping.find({}, (err, documents) => {
+      if(err)
+        res.status(500).json(err);
+      else
+        res.json(documents);
+    });
+});
 // Route 2
 // =======
-// When you visit this route, the server will
-// scrape data from the site of your choice, and save it to
-// MongoDB.
-// TIP: Think back to how you pushed website data
-// into an empty array in the last class. How do you
-// push it into a MongoDB collection instead?
+// Scrape webside data and save to database
+app.get('/scrape', (req, res) => {
+  request.get('https://thecodinglove.com/', (err, returnedResponse, body) => {
+     if(err)
+         res.status(500).json(err);
+     else {
+         const $ = cheerio.load(body);
+         const post = $('main').find('.blog-post');
+         const transaction = {
+             fail: [],
+             success: []
+         };
+         post.each( (i, elem) => {
+             const title = $(elem).children('h1.blog-post-title').find('a').text();
+             const img = $(elem).children('div.blog-post-content').find('img').attr('src');
+             if (title && img) {
+                 db.articles.insert({
+                     title: title,
+                     image: escape(img)
+                 }, (err, document) => {
+                     if(err){
+                         console.log(`Could not insert document ${i}`, err);
+                         transaction.fail.push(`${i}: ${title}`);
+                     }
+                     else{
+                         console.log(document);
+                         transaction.success.push(`${document.id}: ${title}`);
+                     }
+                 });
+             }
+         });
 
+         res.json('Scraping Completed');
+     }
+  });
+
+});
 /* -/-/-/-/-/-/-/-/-/-/-/-/- */
 
 // Listen on port 3000
